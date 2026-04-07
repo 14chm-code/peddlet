@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>걍 페들렛</title>
+<style>
+:root{
+  --bg1:#f7f9ff;
+  --bg2:#eef2ff;
+  --card:#ffffffcc;
+  --text:#1f2937;
+  --muted:#6b7280;
+  --primary:#4f46e5;
+}
+
+body {
+  margin:0;
+  font-family:'Segoe UI', sans-serif;
+  background: linear-gradient(135deg,var(--bg1),var(--bg2));
+  color:var(--text);
+}
+
+#topbar {
+  padding:12px;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(10px);
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+}
+
+input,button {
+  padding:8px;
+  border-radius:10px;
+  border:1px solid #e5e7eb;
+  outline:none;
+  background:white;
+}
+
+input::placeholder{ color:#9ca3af; }
+
+button {
+  background:var(--primary);
+  color:white;
+  cursor:pointer;
+  transition:0.2s;
+  border:none;
+}
+button:hover { transform:scale(1.05); }
+
+#board {
+  position:relative;
+  width:100vw;
+  height:90vh;
+}
+
+.card {
+  width:240px;
+  padding:12px;
+  border-radius:16px;
+  position:absolute;
+  cursor:grab;
+  background:var(--card);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  transition:0.2s;
+}
+
+.card:hover {
+  transform: scale(1.05);
+}
+
+.card img {
+  width:100%;
+  border-radius:10px;
+  margin-top:8px;
+}
+
+.deleteBtn {
+  position:absolute;
+  top:6px;
+  right:6px;
+  background:#ef4444;
+  border:none;
+  border-radius:6px;
+  color:white;
+  cursor:pointer;
+}
+
+.nickname {
+  font-size:12px;
+  color:var(--muted);
+}
+
+.modal {
+  position:fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  background:rgba(0,0,0,0.4);
+  display:none;
+  justify-content:center;
+  align-items:center;
+}
+
+.modal-content {
+  background:white;
+  color:var(--text);
+  padding:20px;
+  border-radius:15px;
+  width:320px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.2);
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+<input id="nickname" placeholder="닉네임">
+<input id="title" placeholder="제목">
+<input id="content" placeholder="내용">
+<input id="link" placeholder="링크">
+<input id="image" placeholder="이미지 URL">
+<input type="color" id="color">
+<button onclick="addPost()">추가</button>
+<input id="search" placeholder="검색" oninput="searchPosts()">
+</div>
+
+<div id="board"></div>
+
+<div id="modal" class="modal" onclick="this.style.display='none'">
+  <div class="modal-content" id="modalContent"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, push, onChildAdded, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBpuB5vWVpELPQ-fGydAHXxGPXKxRLuHA0",
+  authDomain: "chat-bd081.firebaseapp.com",
+  databaseURL: "https://chat-bd081-default-rtdb.firebaseio.com",
+  projectId: "chat-bd081",
+  storageBucket: "chat-bd081.firebasestorage.app",
+  messagingSenderId: "779491702064",
+  appId: "1:779491702064:web:95ff226ece13412a2304f5",
+  measurementId: "G-09FN5D9QN1"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let allCards = [];
+
+window.addPost = function(){
+  const nickname = nicknameEl.value;
+  const title = titleEl.value;
+  const content = contentEl.value;
+  const link = linkEl.value;
+  const image = imageEl.value;
+  const color = colorEl.value || '#ffffff';
+
+  if(!title || !content || !nickname) return;
+
+  push(ref(db,'posts'), {
+    nickname, title, content, link, image, color,
+    x: Math.random()*500,
+    y: Math.random()*300
+  });
+};
+
+const nicknameEl = document.getElementById('nickname');
+const titleEl = document.getElementById('title');
+const contentEl = document.getElementById('content');
+const linkEl = document.getElementById('link');
+const imageEl = document.getElementById('image');
+const colorEl = document.getElementById('color');
+
+onChildAdded(ref(db,'posts'), data=>{
+  const p = data.val();
+  const id = data.key;
+
+  const card = document.createElement('div');
+  card.className='card';
+  card.style.background=p.color || 'white';
+  card.style.left=(p.x||0)+'px';
+  card.style.top=(p.y||0)+'px';
+
+  card.innerHTML=`
+    <button class="deleteBtn">X</button>
+    <b>${p.title}</b><br>
+    <div class="nickname">👤 ${p.nickname}</div>
+    <small>${p.content}</small>
+    ${p.link?`<br><a href="${p.link}" target="_blank">🔗 링크</a>`:''}
+    ${p.image?`<img src="${p.image}">`:''}
+  `;
+
+  card.onclick = (e)=>{
+    if(e.target.className==='deleteBtn') return;
+    modalContent.innerHTML = card.innerHTML;
+    modal.style.display='flex';
+  };
+
+  card.querySelector('.deleteBtn').onclick = () => {
+    remove(ref(db,'posts/'+id));
+    card.remove();
+  };
+
+  makeDraggable(card,id);
+
+  document.getElementById('board').appendChild(card);
+  allCards.push(card);
+});
+
+function makeDraggable(el,id){
+  let offsetX, offsetY, dragging=false;
+
+  el.onmousedown = e=>{
+    dragging=true;
+    offsetX = e.offsetX;
+    offsetY = e.offsetY;
+  };
+
+  document.onmousemove = e=>{
+    if(!dragging) return;
+
+    const x = e.pageX - offsetX;
+    const y = e.pageY - offsetY;
+
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+
+    update(ref(db,'posts/'+id),{x,y});
+  };
+
+  document.onmouseup = ()=> dragging=false;
+}
+
+window.searchPosts = function(){
+  const q = document.getElementById('search').value.toLowerCase();
+
+  allCards.forEach(c=>{
+    c.style.display = c.innerText.toLowerCase().includes(q) ? 'block' : 'none';
+  });
+}
+</script>
+
+</body>
+</html>
